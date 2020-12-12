@@ -39,22 +39,20 @@ class Generator {
         });
         this.templates = templates;
     }
-    generatePages() {
+    generateAllPages() {
         for (const key of this.pageKeysByURLAscending) {
             this.generatePage(this.frontMatterData.get(key));
         }
+        this.generateSiteMap();
+        this.generateIndexXml();
+        this.generateBlogXml();
     }
-    logDebugInfo() {
-        const allFrontMatterKeys = [...this.uniqueFrontMatterKeys.values()];
-        const nonStandardKeys = allFrontMatterKeys.filter((key) => {
-            return !StandardFrontMatterKeys.includes(key);
-        });
-        const standardKeys = allFrontMatterKeys.filter((key) => {
-            return StandardFrontMatterKeys.includes(key);
-        });
-        console.log(`all front matter keys used: ${allFrontMatterKeys}`);
-        console.log(`non-standard keys: ${nonStandardKeys}`);
-        console.log(`standard keys: ${standardKeys}`);
+    generateSinglePage(sourceFileAbsolutePath) {
+        const [postPoperties, isPost] = this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
+        if (!postPoperties) {
+            return;
+        }
+        this.generatePage(postPoperties);
     }
     generatePage(page) {
         const fileDirectory = path.join(this.outputDirectory, page.relativePath);
@@ -76,6 +74,18 @@ class Generator {
             });
         }
     }
+    logDebugInfo() {
+        const allFrontMatterKeys = [...this.uniqueFrontMatterKeys.values()];
+        const nonStandardKeys = allFrontMatterKeys.filter((key) => {
+            return !StandardFrontMatterKeys.includes(key);
+        });
+        const standardKeys = allFrontMatterKeys.filter((key) => {
+            return StandardFrontMatterKeys.includes(key);
+        });
+        console.log(`all front matter keys used: ${allFrontMatterKeys}`);
+        console.log(`non-standard keys: ${nonStandardKeys}`);
+        console.log(`standard keys: ${standardKeys}`);
+    }
     loadAllFrontMatterFiles() {
         this.frontMatterData = new Map();
         let sourceFileAbsolutePaths = new Array();
@@ -86,35 +96,49 @@ class Generator {
         });
         let posts = new Array();
         for (const sourceFileAbsolutePath of sourceFileAbsolutePaths) {
-            log.info(`processing "${sourceFileAbsolutePath}"`);
-            const { data, markdown, errors } = parseFrontMatterFile(sourceFileAbsolutePath);
-            if (errors.length > 0) {
-                log.info(`error loading "${sourceFileAbsolutePath}`);
+            const [postPoperties, isPost] = this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
+            if (!postPoperties) {
                 continue;
             }
-            Object.keys(data).forEach((key) => {
-                this.uniqueFrontMatterKeys.add(key);
-            });
-            if (!data) {
-                continue;
-            }
-            if (data.published === false) {
-                continue;
-            }
-            const name = path.basename(sourceFileAbsolutePath, path.extname(sourceFileAbsolutePath));
-            const isIndex = name === 'index';
-            const slug = data.slug || (isIndex ? '' : name);
-            const tmpl = data.template || 'post';
-            const relativePath = path.join(tmpl === 'post' ? 'blog' : '', slug, '/');
-            const canonicalURL = url.resolve(this.rootURL, relativePath);
-            const postPoperties = Object.assign(Object.assign({}, data), { relativePath,
-                slug, template: tmpl, latestDate: data.lastmod || data.date, canonicalURL });
-            postPoperties.body = this.renderPost(markdown, postPoperties);
-            this.frontMatterData.set(postPoperties.canonicalURL, postPoperties);
-            if (tmpl === 'post') {
+            if (isPost) {
                 posts = [...posts, postPoperties];
             }
         }
+        this.updateIndexes(posts);
+    }
+    loadSingleFrontMatterFile(sourceFileAbsolutePath) {
+        log.info(`processing "${sourceFileAbsolutePath}"`);
+        const { data, markdown, errors } = parseFrontMatterFile(sourceFileAbsolutePath);
+        if (errors.length > 0) {
+            log.info(`error loading "${sourceFileAbsolutePath}`);
+            return [null, false];
+        }
+        Object.keys(data).forEach((key) => {
+            this.uniqueFrontMatterKeys.add(key);
+        });
+        if (!data) {
+            log.warn(`no data for "${sourceFileAbsolutePath}`);
+            return [null, false];
+            return;
+        }
+        if (data.published === false) {
+            log.info(`not published: "${sourceFileAbsolutePath}`);
+            return [null, false];
+            return;
+        }
+        const name = path.basename(sourceFileAbsolutePath, path.extname(sourceFileAbsolutePath));
+        const isIndex = name === 'index';
+        const slug = data.slug || (isIndex ? '' : name);
+        const tmpl = data.template || 'post';
+        const relativePath = path.join(tmpl === 'post' ? 'blog' : '', slug, '/');
+        const canonicalURL = url.resolve(this.rootURL, relativePath);
+        const postPoperties = Object.assign(Object.assign({}, data), { relativePath,
+            slug, template: tmpl, latestDate: data.lastmod || data.date, canonicalURL });
+        postPoperties.body = this.renderPost(markdown, postPoperties);
+        this.frontMatterData.set(postPoperties.canonicalURL, postPoperties);
+        return [postPoperties, tmpl === 'post'];
+    }
+    updateIndexes(posts) {
         const canonicalURLSortAscending = (a, b) => {
             return a.canonicalURL > b.canonicalURL ? 1 : -1;
         };

@@ -77,23 +77,24 @@ class Generator {
     this.templates = templates;
   }
 
-  generatePages(): void {
+  generateAllPages(): void {
     for (const key of this.pageKeysByURLAscending) {
       this.generatePage(this.frontMatterData.get(key));
     }
+
+    this.generateSiteMap();
+    this.generateIndexXml();
+    this.generateBlogXml();
   }
 
-  logDebugInfo(): void {
-    const allFrontMatterKeys = [...this.uniqueFrontMatterKeys.values()];
-    const nonStandardKeys = allFrontMatterKeys.filter((key: string) => {
-      return !StandardFrontMatterKeys.includes(key);
-    });
-    const standardKeys = allFrontMatterKeys.filter((key: string) => {
-      return StandardFrontMatterKeys.includes(key);
-    });
-    console.log(`all front matter keys used: ${allFrontMatterKeys}`);
-    console.log(`non-standard keys: ${nonStandardKeys}`);
-    console.log(`standard keys: ${standardKeys}`);
+  generateSinglePage(sourceFileAbsolutePath: string): void {
+    const [postPoperties, isPost] = this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
+
+    if (!postPoperties) {
+      return;
+    }
+
+    this.generatePage(postPoperties);
   }
 
   private generatePage(page: PostProperties): void {
@@ -120,6 +121,19 @@ class Generator {
     }
   }
 
+  logDebugInfo(): void {
+    const allFrontMatterKeys = [...this.uniqueFrontMatterKeys.values()];
+    const nonStandardKeys = allFrontMatterKeys.filter((key: string) => {
+      return !StandardFrontMatterKeys.includes(key);
+    });
+    const standardKeys = allFrontMatterKeys.filter((key: string) => {
+      return StandardFrontMatterKeys.includes(key);
+    });
+    console.log(`all front matter keys used: ${allFrontMatterKeys}`);
+    console.log(`non-standard keys: ${nonStandardKeys}`);
+    console.log(`standard keys: ${standardKeys}`);
+  }
+
   private loadAllFrontMatterFiles(): void {
     this.frontMatterData = new Map<string, PostProperties>();
 
@@ -134,61 +148,79 @@ class Generator {
     let posts = new Array<PostProperties>();
 
     for (const sourceFileAbsolutePath of sourceFileAbsolutePaths) {
-      log.info(`processing "${sourceFileAbsolutePath}"`);
-
-      const { data, markdown, errors } = parseFrontMatterFile(
-        sourceFileAbsolutePath,
-      );
-      if (errors.length > 0) {
-        // TODO WFH
-        log.info(`error loading "${sourceFileAbsolutePath}`);
+      const [postPoperties, isPost] = this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
+      if (!postPoperties) {
         continue;
       }
 
-      Object.keys(data).forEach((key: string) => {
-        this.uniqueFrontMatterKeys.add(key);
-      });
-
-      if (!data) {
-        continue;
-      }
-
-      if (data.published === false) {
-        continue;
-      }
-
-      // TODO WFH Don't hack at the original front matter. Make it clear it's being
-      // extended.
-      const name = path.basename(
-        sourceFileAbsolutePath,
-        path.extname(sourceFileAbsolutePath),
-      );
-      const isIndex = name === 'index';
-      const slug = data.slug || (isIndex ? '' : name);
-      const tmpl = data.template || 'post';
-      const relativePath = path.join(tmpl === 'post' ? 'blog' : '', slug, '/');
-      const canonicalURL = url.resolve(this.rootURL, relativePath);
-
-      // Normalized data.
-      // TODO WFH Some of these could be functions, or helpers.
-      const postPoperties = {
-        ...data,
-        relativePath,
-        slug,
-        template: tmpl,
-        latestDate: data.lastmod || data.date,
-        canonicalURL,
-      } as PostProperties;
-
-      postPoperties.body = this.renderPost(markdown, postPoperties);
-
-      this.frontMatterData.set(postPoperties.canonicalURL, postPoperties);
-
-      if (tmpl === 'post') {
+      if (isPost) {
         posts = [...posts, postPoperties];
       }
     }
 
+    this.updateIndexes(posts);
+  }
+
+  private loadSingleFrontMatterFile(sourceFileAbsolutePath: string): [PostProperties, boolean] {
+    log.info(`processing "${sourceFileAbsolutePath}"`);
+
+    const { data, markdown, errors } = parseFrontMatterFile(
+      sourceFileAbsolutePath,
+    );
+    if (errors.length > 0) {
+      // TODO WFH
+      log.info(`error loading "${sourceFileAbsolutePath}`);
+      return [null, false];
+    }
+
+    Object.keys(data).forEach((key: string) => {
+      this.uniqueFrontMatterKeys.add(key);
+    });
+
+    if (!data) {
+      log.warn(`no data for "${sourceFileAbsolutePath}`);
+      return [null, false];
+      return;
+    }
+
+    if (data.published === false) {
+      log.info(`not published: "${sourceFileAbsolutePath}`);
+      return [null, false];
+      return;
+    }
+
+    // TODO WFH Don't hack at the original front matter. Make it clear it's being
+    // extended.
+    const name = path.basename(
+      sourceFileAbsolutePath,
+      path.extname(sourceFileAbsolutePath),
+    );
+    const isIndex = name === 'index';
+    const slug = data.slug || (isIndex ? '' : name);
+    const tmpl = data.template || 'post';
+    const relativePath = path.join(tmpl === 'post' ? 'blog' : '', slug, '/');
+    const canonicalURL = url.resolve(this.rootURL, relativePath);
+
+    // Normalized data.
+    // TODO WFH Some of these could be functions, or helpers.
+    const postPoperties = {
+      ...data,
+      relativePath,
+      slug,
+      template: tmpl,
+      latestDate: data.lastmod || data.date,
+      canonicalURL,
+    } as PostProperties;
+
+    postPoperties.body = this.renderPost(markdown, postPoperties);
+
+    // TODO WFH Side effect...
+    this.frontMatterData.set(postPoperties.canonicalURL, postPoperties);
+
+    return [postPoperties, tmpl === 'post'];
+  }
+
+  private updateIndexes(posts: Array<PostProperties>): void {
     const canonicalURLSortAscending = (
       a: PostProperties,
       b: PostProperties,

@@ -1,6 +1,6 @@
-import * as fs from 'fs';
 import Generator from './generator';
 import { log } from './util';
+import chokidar from 'chokidar';
 
 export default function (
   sourceDirectory: string,
@@ -20,24 +20,30 @@ export default function (
 
   log.info('Starting');
 
-  generator.generatePages();
-  generator.generateSiteMap();
-  generator.generateIndexXml();
-  generator.generateBlogXml();
-
+  generator.generateAllPages();
   generator.logDebugInfo();
 
   if (watchSource) {
     log.info('Watching for changes');
 
-    fs.watch(
-      sourceDirectory,
-      {
-        persistent: true,
-        recursive: true,
-      },
-      (eventType: string, filePath: string) => {
-        console.log(`change: ${eventType} ${filePath}`);
+    // Initialize watcher.
+    const watcher = chokidar.watch(sourceDirectory, {
+      ignoreInitial: true, // Also of interest may be .on('ready')
+      persistent: true
+    });
+
+    watcher.on('change', (path: string) => {
+      console.log('change at:', path);
+      generator.generateSinglePage(path);
+    });
+    watcher.on('unlinked', (path: string) => {
+      console.log('removed at:', path);
+      generator.generateSinglePage(path);
+    });
+    watcher.on('add', (path: string) => {
+      console.log('add at:', path);
+      generator.generateSinglePage(path);
+    });
         // const sourceFileAbsolutePath = path.join(sourceDirectory, filePath);
         // log.info(`file changed (${eventType}) "${sourceFileAbsolutePath}"`);
         // const data = processSourceFile(
@@ -60,8 +66,6 @@ export default function (
         // }
         // sortedPosts = sortedPosts.sort().reverse();
         // generator.generateIndex(sortedPosts, posts);
-      },
-    );
 
     process.on('SIGINT', function () {
       console.log('Stopping');
