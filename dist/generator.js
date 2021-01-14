@@ -1,3 +1,12 @@
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
@@ -13,9 +22,13 @@ class Generator {
         this.title = title;
         this.rootURL = rootURL;
         this.uniqueFrontMatterKeys = new Set();
-        this.loadHelpers();
-        this.loadTemplates();
-        this.loadAllFrontMatterFiles();
+    }
+    load() {
+        return __awaiter(this, void 0, void 0, function* () {
+            this.loadHelpers();
+            this.loadTemplates();
+            yield this.loadAllFrontMatterFiles();
+        });
     }
     loadHelpers() {
         const helpersFile = require(path.join(this.templateDirectory, 'helpers'));
@@ -48,11 +61,13 @@ class Generator {
         this.generateBlogXml();
     }
     generateSinglePage(sourceFileAbsolutePath) {
-        const [postPoperties, isPost] = this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
-        if (!postPoperties) {
-            return;
-        }
-        this.generatePage(postPoperties);
+        return __awaiter(this, void 0, void 0, function* () {
+            const [postProperties, isPost] = yield this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
+            if (!postProperties) {
+                return;
+            }
+            this.generatePage(postProperties);
+        });
     }
     generatePage(page) {
         const fileDirectory = path.join(this.outputDirectory, page.relativePath);
@@ -87,56 +102,58 @@ class Generator {
         console.log(`standard keys: ${standardKeys}`);
     }
     loadAllFrontMatterFiles() {
-        this.frontMatterData = new Map();
-        let sourceFileAbsolutePaths = new Array();
-        walk(this.sourceDirectory, (filePath) => {
-            if (['.markdown', '.md'].includes(path.extname(filePath))) {
-                sourceFileAbsolutePaths = [...sourceFileAbsolutePaths, filePath];
+        return __awaiter(this, void 0, void 0, function* () {
+            this.frontMatterData = new Map();
+            let sourceFileAbsolutePaths = new Array();
+            walk(this.sourceDirectory, (filePath) => {
+                if (['.markdown', '.md'].includes(path.extname(filePath))) {
+                    sourceFileAbsolutePaths = [...sourceFileAbsolutePaths, filePath];
+                }
+            });
+            let posts = new Array();
+            for (const sourceFileAbsolutePath of sourceFileAbsolutePaths) {
+                const [postPoperties, isPost] = yield this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
+                if (!postPoperties) {
+                    continue;
+                }
+                if (isPost) {
+                    posts = [...posts, postPoperties];
+                }
             }
+            this.updateIndexes(posts);
         });
-        let posts = new Array();
-        for (const sourceFileAbsolutePath of sourceFileAbsolutePaths) {
-            const [postPoperties, isPost] = this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
-            if (!postPoperties) {
-                continue;
-            }
-            if (isPost) {
-                posts = [...posts, postPoperties];
-            }
-        }
-        this.updateIndexes(posts);
     }
     loadSingleFrontMatterFile(sourceFileAbsolutePath) {
-        log.info(`processing "${sourceFileAbsolutePath}"`);
-        const { data, markdown, errors } = parseFrontMatterFile(sourceFileAbsolutePath);
-        if (errors.length > 0) {
-            log.info(`error loading "${sourceFileAbsolutePath}`);
-            return [null, false];
-        }
-        Object.keys(data).forEach((key) => {
-            this.uniqueFrontMatterKeys.add(key);
+        return __awaiter(this, void 0, void 0, function* () {
+            log.info(`processing "${sourceFileAbsolutePath}"`);
+            const { data, markdown, errors } = yield parseFrontMatterFile(sourceFileAbsolutePath);
+            if (errors.length > 0) {
+                log.info(`error loading "${sourceFileAbsolutePath}`);
+                return [null, false];
+            }
+            if (Object.keys(data).length === 0) {
+                log.warn(`no data for "${sourceFileAbsolutePath}`);
+                return [null, false];
+            }
+            Object.keys(data).forEach((key) => {
+                this.uniqueFrontMatterKeys.add(key);
+            });
+            if (data.published === false) {
+                log.info(`not published: "${sourceFileAbsolutePath}`);
+                return [null, false];
+            }
+            const name = path.basename(sourceFileAbsolutePath, path.extname(sourceFileAbsolutePath));
+            const isIndex = name === 'index';
+            const slug = data.slug || (isIndex ? '' : name);
+            const tmpl = data.template || 'post';
+            const relativePath = path.join(tmpl === 'post' ? 'blog' : '', slug, '/');
+            const canonicalURL = url.resolve(this.rootURL, relativePath);
+            const postPoperties = Object.assign(Object.assign({}, data), { relativePath,
+                slug, template: tmpl, latestDate: data.lastmod || data.date, canonicalURL });
+            postPoperties.body = this.renderPost(markdown, postPoperties);
+            this.frontMatterData.set(postPoperties.canonicalURL, postPoperties);
+            return [postPoperties, tmpl === 'post'];
         });
-        if (!data) {
-            log.warn(`no data for "${sourceFileAbsolutePath}`);
-            return [null, false];
-            return;
-        }
-        if (data.published === false) {
-            log.info(`not published: "${sourceFileAbsolutePath}`);
-            return [null, false];
-            return;
-        }
-        const name = path.basename(sourceFileAbsolutePath, path.extname(sourceFileAbsolutePath));
-        const isIndex = name === 'index';
-        const slug = data.slug || (isIndex ? '' : name);
-        const tmpl = data.template || 'post';
-        const relativePath = path.join(tmpl === 'post' ? 'blog' : '', slug, '/');
-        const canonicalURL = url.resolve(this.rootURL, relativePath);
-        const postPoperties = Object.assign(Object.assign({}, data), { relativePath,
-            slug, template: tmpl, latestDate: data.lastmod || data.date, canonicalURL });
-        postPoperties.body = this.renderPost(markdown, postPoperties);
-        this.frontMatterData.set(postPoperties.canonicalURL, postPoperties);
-        return [postPoperties, tmpl === 'post'];
     }
     updateIndexes(posts) {
         const canonicalURLSortAscending = (a, b) => {

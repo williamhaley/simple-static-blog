@@ -1,5 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import * as util from 'util';
+
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const frontmatter = require('@github-docs/frontmatter');
 
@@ -28,8 +30,21 @@ export const log = {
   },
 };
 
-export const parseFrontMatterFile = (sourceFileAbsolutePath: string): any => {
-  const frontMatterString = fs.readFileSync(sourceFileAbsolutePath, 'utf-8');
+export const parseFrontMatterFile = async (sourceFileAbsolutePath: string): Promise<any> => {
+  const readFile = util.promisify(fs.readFile);
+
+  let frontMatterString = '';
+
+  try {
+    const frontMatterBuffer = await readFile(sourceFileAbsolutePath);
+    frontMatterString = frontMatterBuffer.toString('utf-8');
+  } catch (err) {
+    console.warn(err);
+  }
+
+  if (frontMatterString === '') {
+    throw new Error(`error parsing :${sourceFileAbsolutePath}`);
+  }
 
   const { data, content, errors } = frontmatter(frontMatterString);
 

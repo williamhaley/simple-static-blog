@@ -1,15 +1,18 @@
 import Generator from './generator';
 import { log } from './util';
 import chokidar from 'chokidar';
+import server from './server';
 
-export default function (
+export default async function (
   sourceDirectory: string,
   destinationDirectory: string,
   templatesDirectory: string,
   title: string,
   rootURL: string,
   watchSource?: boolean,
-): void {
+  serve?: boolean,
+  port?: number,
+) {
   const generator = new Generator(
     sourceDirectory,
     destinationDirectory,
@@ -20,8 +23,14 @@ export default function (
 
   log.info('Starting');
 
+  await generator.load();
+
   generator.generateAllPages();
   generator.logDebugInfo();
+
+  if (serve) {
+    server(destinationDirectory, port);
+  }
 
   if (watchSource) {
     log.info('Watching for changes');
@@ -32,17 +41,17 @@ export default function (
       persistent: true
     });
 
-    watcher.on('change', (path: string) => {
+    watcher.on('change', async (path: string) => {
       console.log('change at:', path);
-      generator.generateSinglePage(path);
+      await generator.generateSinglePage(path);
     });
-    watcher.on('unlinked', (path: string) => {
+    watcher.on('unlinked', async (path: string) => {
       console.log('removed at:', path);
-      generator.generateSinglePage(path);
+      await generator.generateSinglePage(path);
     });
-    watcher.on('add', (path: string) => {
+    watcher.on('add', async (path: string) => {
       console.log('add at:', path);
-      generator.generateSinglePage(path);
+      await generator.generateSinglePage(path);
     });
         // const sourceFileAbsolutePath = path.join(sourceDirectory, filePath);
         // log.info(`file changed (${eventType}) "${sourceFileAbsolutePath}"`);

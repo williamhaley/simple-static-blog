@@ -39,10 +39,12 @@ class Generator {
     this.rootURL = rootURL;
 
     this.uniqueFrontMatterKeys = new Set<string>();
+  }
 
+  async load() {
     this.loadHelpers();
     this.loadTemplates();
-    this.loadAllFrontMatterFiles();
+    await this.loadAllFrontMatterFiles();
   }
 
   private loadHelpers(): void {
@@ -87,14 +89,14 @@ class Generator {
     this.generateBlogXml();
   }
 
-  generateSinglePage(sourceFileAbsolutePath: string): void {
-    const [postPoperties, isPost] = this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
+  async generateSinglePage(sourceFileAbsolutePath: string): Promise<void> {
+    const [postProperties, isPost] = await this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
 
-    if (!postPoperties) {
+    if (!postProperties) {
       return;
     }
 
-    this.generatePage(postPoperties);
+    this.generatePage(postProperties);
   }
 
   private generatePage(page: PostProperties): void {
@@ -134,7 +136,7 @@ class Generator {
     console.log(`standard keys: ${standardKeys}`);
   }
 
-  private loadAllFrontMatterFiles(): void {
+  private async loadAllFrontMatterFiles(): Promise<void> {
     this.frontMatterData = new Map<string, PostProperties>();
 
     let sourceFileAbsolutePaths = new Array<string>();
@@ -148,7 +150,7 @@ class Generator {
     let posts = new Array<PostProperties>();
 
     for (const sourceFileAbsolutePath of sourceFileAbsolutePaths) {
-      const [postPoperties, isPost] = this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
+      const [postPoperties, isPost] = await this.loadSingleFrontMatterFile(sourceFileAbsolutePath);
       if (!postPoperties) {
         continue;
       }
@@ -161,10 +163,10 @@ class Generator {
     this.updateIndexes(posts);
   }
 
-  private loadSingleFrontMatterFile(sourceFileAbsolutePath: string): [PostProperties, boolean] {
+  private async loadSingleFrontMatterFile(sourceFileAbsolutePath: string): Promise<[PostProperties, boolean]> {
     log.info(`processing "${sourceFileAbsolutePath}"`);
 
-    const { data, markdown, errors } = parseFrontMatterFile(
+    const { data, markdown, errors } = await parseFrontMatterFile(
       sourceFileAbsolutePath,
     );
     if (errors.length > 0) {
@@ -173,20 +175,18 @@ class Generator {
       return [null, false];
     }
 
+    if (Object.keys(data).length === 0) {
+      log.warn(`no data for "${sourceFileAbsolutePath}`);
+      return [null, false];
+    }
+
     Object.keys(data).forEach((key: string) => {
       this.uniqueFrontMatterKeys.add(key);
     });
 
-    if (!data) {
-      log.warn(`no data for "${sourceFileAbsolutePath}`);
-      return [null, false];
-      return;
-    }
-
     if (data.published === false) {
       log.info(`not published: "${sourceFileAbsolutePath}`);
       return [null, false];
-      return;
     }
 
     // TODO WFH Don't hack at the original front matter. Make it clear it's being
