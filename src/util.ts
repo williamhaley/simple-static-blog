@@ -43,6 +43,7 @@ export const parseFrontMatterFile = async (sourceFileAbsolutePath: string): Prom
   }
 
   if (frontMatterString === '') {
+    console.warn(`empty front matter string for :${sourceFileAbsolutePath}`)
     throw new Error(`error parsing :${sourceFileAbsolutePath}`);
   }
 

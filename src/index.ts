@@ -12,6 +12,7 @@ export default async function (
   watchSource?: boolean,
   serve?: boolean,
   port?: number,
+  staticDirectory?: string,
 ) {
   const generator = new Generator(
     sourceDirectory,
@@ -34,6 +35,20 @@ export default async function (
 
   if (watchSource) {
     log.info('Watching for changes');
+
+    const staticFileWatcher = chokidar.watch(staticDirectory, {
+      ignoreInitial: true,
+      persistent: true,
+    });
+    staticFileWatcher.on('change', async (path: string) => {
+      console.log(`[static] change at: ${path}`);
+    });
+    staticFileWatcher.on('unlinked', async (path: string) => {
+      console.log(`[static] removed at: ${path}`);
+    });
+    staticFileWatcher.on('add', async (path: string) => {
+      console.log(`[static] add at: ${path}`);
+    });
 
     // Initialize watcher.
     const watcher = chokidar.watch(sourceDirectory, {

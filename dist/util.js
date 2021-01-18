@@ -43,6 +43,7 @@ export const parseFrontMatterFile = (sourceFileAbsolutePath) => __awaiter(void 0
         console.warn(err);
     }
     if (frontMatterString === '') {
+        console.warn(`empty front matter string for :${sourceFileAbsolutePath}`);
         throw new Error(`error parsing :${sourceFileAbsolutePath}`);
     }
     const { data, content, errors } = frontmatter(frontMatterString);

@@ -6,9 +6,7 @@
 const yargs = require('yargs');
 
 const argv = yargs
-  .usage(
-    'Usage: $0 --source [string] --destination [string] --title string --rootURL string --templates string [--watch,--serve, --port number]',
-  )
+  .usage(`Usage: $0 <options>`)
   .demandOption('source')
   .demandOption('destination')
   .demandOption('templates')
@@ -17,6 +15,7 @@ const argv = yargs
   .boolean('watch')
   .boolean('serve')
   .number('port')
+  .string('static')
   .help()
   .alias('help', 'h').argv;
 
@@ -32,4 +31,5 @@ generator(
   argv.watch,
   argv.serve,
   argv.port,
+  argv.static,
 );

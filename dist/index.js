@@ -11,7 +11,7 @@ import Generator from './generator';
 import { log } from './util';
 import chokidar from 'chokidar';
 import server from './server';
-export default function (sourceDirectory, destinationDirectory, templatesDirectory, title, rootURL, watchSource, serve, port) {
+export default function (sourceDirectory, destinationDirectory, templatesDirectory, title, rootURL, watchSource, serve, port, staticDirectory) {
     return __awaiter(this, void 0, void 0, function* () {
         const generator = new Generator(sourceDirectory, destinationDirectory, templatesDirectory, title, rootURL);
         log.info('Starting');
@@ -23,6 +23,19 @@ export default function (sourceDirectory, destinationDirectory, templatesDirecto
         }
         if (watchSource) {
             log.info('Watching for changes');
+            const staticFileWatcher = chokidar.watch(staticDirectory, {
+                ignoreInitial: true,
+                persistent: true,
+            });
+            staticFileWatcher.on('change', (path) => __awaiter(this, void 0, void 0, function* () {
+                console.log(`[static] change at: ${path}`);
+            }));
+            staticFileWatcher.on('unlinked', (path) => __awaiter(this, void 0, void 0, function* () {
+                console.log(`[static] removed at: ${path}`);
+            }));
+            staticFileWatcher.on('add', (path) => __awaiter(this, void 0, void 0, function* () {
+                console.log(`[static] add at: ${path}`);
+            }));
             const watcher = chokidar.watch(sourceDirectory, {
                 ignoreInitial: true,
                 persistent: true
