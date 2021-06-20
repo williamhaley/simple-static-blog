@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
+import * as prettier from 'prettier';
 import { StandardFrontMatterKeys, PostProperties } from './types';
 import { walk, log, parseFrontMatterFile } from './util';
 import Handlebars from 'handlebars';
@@ -110,7 +111,10 @@ class Generator {
       }
     }
 
-    const output = this.renderPage(page.template, page);
+    const output = prettier.format(
+        this.renderPage(page.template, page),
+        { parser: 'html' },
+    );
 
     // Every "page" is represented by a directory with a single index.html file.
     fs.writeFileSync(`${fileDirectory}/index.html`, output);

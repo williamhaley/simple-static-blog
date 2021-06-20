@@ -10,6 +10,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 import * as fs from 'fs';
 import * as path from 'path';
 import * as url from 'url';
+import * as prettier from 'prettier';
 import { StandardFrontMatterKeys } from './types';
 import { walk, log, parseFrontMatterFile } from './util';
 import Handlebars from 'handlebars';
@@ -80,7 +81,7 @@ class Generator {
                 throw error;
             }
         }
-        const output = this.renderPage(page.template, page);
+        const output = prettier.format(this.renderPage(page.template, page), { parser: 'html' });
         fs.writeFileSync(`${fileDirectory}/index.html`, output);
         if (page.aliases) {
             page.aliases.forEach((from) => {
